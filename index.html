@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>JWT Token Refresh and Expiry Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f4f8;
+      color: #333;
+      padding: 30px;
+    }
+
+    h1 {
+      color: #0056b3;
+    }
+
+    .container {
+      background: #fff;
+      padding: 20px 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      max-width: 600px;
+    }
+
+    .token-box {
+      background: #f9f9f9;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      word-wrap: break-word;
+      font-size: 14px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    .status {
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    .active { color: green; }
+    .expired { color: red; }
+    .refreshed { color: orange; }
+
+    .log {
+      background: #222;
+      color: #0f0;
+      font-family: monospace;
+      padding: 10px;
+      border-radius: 6px;
+      height: 150px;
+      overflow-y: auto;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🔐 JWT Token Refresh & Expiry Demo (Frontend Simulation)</h1>
+  <div class="container">
+    <p>This example shows how access tokens expire and are automatically refreshed using a refresh token.</p>
+    <button onclick="login()">Simulate Login</button>
+
+    <h3>Access Token:</h3>
+    <div class="token-box" id="accessTokenBox">No token yet.</div>
+
+    <h3>Refresh Token:</h3>
+    <div class="token-box" id="refreshTokenBox">No token yet.</div>
+
+    <p class="status" id="status">Status: Not logged in</p>
+
+    <h3>Activity Log:</h3>
+    <div class="log" id="log"></div>
+  </div>
+
+  <script>
+    // ============================
+    // SIMULATED JWT SYSTEM
+    // ============================
+    let accessToken = null;
+    let refreshToken = null;
+    let tokenCheckInterval = null;
+
+    // Create a fake JWT token
+    function createFakeJWT(expiryInSeconds) {
+      const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+      const payload = btoa(JSON.stringify({
+        user: "JohnDoe",
+        exp: Math.floor(Date.now() / 1000) + expiryInSeconds
+      }));
+      const signature = btoa("signature");
+      return `${header}.${payload}.${signature}`;
+    }
+
+    // Decode payload to read expiration
+    function decodePayload(token) {
+      try {
+        return JSON.parse(atob(token.split(".")[1]));
+      } catch {
+        return null;
+      }
+    }
+
+    // ============================
+    // LOGIN (Generate Tokens)
+    // ============================
+    function login() {
+      accessToken = createFakeJWT(10);   // expires in 10 seconds
+      refreshToken = createFakeJWT(60);  // expires in 60 seconds
+
+      document.getElementById("accessTokenBox").textContent = accessToken;
+      document.getElementById("refreshTokenBox").textContent = refreshToken;
+      updateStatus("Active", "active");
+      log("✅ Logged in. Access token and refresh token created.");
+
+      if (tokenCheckInterval) clearInterval(tokenCheckInterval);
+      monitorToken();
+    }
+
+    // ============================
+    // MONITOR TOKEN STATUS
+    // ============================
+    function monitorToken() {
+      tokenCheckInterval = setInterval(() => {
+        const accessPayload = decodePayload(accessToken);
+        const refreshPayload = decodePayload(refreshToken);
+
+        const now = Math.floor(Date.now() / 1000);
+
+        if (!accessPayload || !refreshPayload) {
+          updateStatus("Error parsing token", "expired");
+          return;
+        }
+
+        // Check if refresh token has expired
+        if (refreshPayload.exp <= now) {
+          updateStatus("Refresh Token Expired — Please Login Again", "expired");
+          log("❌ Refresh token expired. User must log in again.");
+          clearInterval(tokenCheckInterval);
+          return;
+        }
+
+        // Check if access token has expired
+        if (accessPayload.exp <= now) {
+          log("⚠️ Access token expired. Attempting refresh...");
+          refreshAccessToken();
+        } else {
+          const remaining = accessPayload.exp - now;
+          updateStatus(`Active (expires in ${remaining}s)`, "active");
+        }
+      }, 1000);
+    }
+
+    // ============================
+    // REFRESH ACCESS TOKEN
+    // ============================
+    function refreshAccessToken() {
+      const refreshPayload = decodePayload(refreshToken);
+      const now = Math.floor(Date.now() / 1000);
+
+      if (refreshPayload.exp > now) {
+        accessToken = createFakeJWT(10); // new 10-second access token
+        document.getElementById("accessTokenBox").textContent = accessToken;
+        updateStatus("Access Token Refreshed", "refreshed");
+        log("🔁 Access token refreshed successfully!");
+      } else {
+        updateStatus("Refresh Token Expired", "expired");
+        log("❌ Cannot refresh: refresh token expired.");
+        clearInterval(tokenCheckInterval);
+      }
+    }
+
+    // ============================
+    // UI HELPERS
+    // ============================
+    function updateStatus(text, cssClass) {
+      const status = document.getElementById("status");
+      status.textContent = "Status: " + text;
+      status.className = "status " + cssClass;
+    }
+
+    function log(message) {
+      const logBox = document.getElementById("log");
+      const time = new Date().toLocaleTimeString();
+      logBox.innerHTML += `[${time}] ${message}<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+  </script>
+
+</body>
+</html>
